@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <!-- Improved viewport for mobile: allows scaling for accessibility, but we control layout via media queries -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.2, user-scalable=yes, viewport-fit=cover">
     <title>RADER.SHADOW.NET</title>
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
     <style>
@@ -54,23 +55,57 @@
             box-shadow: 0 5px 15px rgba(0,0,0,0.8);
         }
         .brand { font-size: 1rem; font-weight: bold; text-shadow: 0 0 8px var(--neon); letter-spacing: 3px; }
+        /* smaller subbrand on mobile */
+        .subbrand { font-size: 0.7rem; opacity: 0.7; letter-spacing: 1px; }
 
         /* CHAT AREA */
         #chat-box { flex: 1; overflow-y: auto; padding: 1.5rem; display: flex; flex-direction: column; gap: 0.6rem; scroll-behavior: smooth; }
         .entry { font-size: 0.85rem; line-height: 1.4; border-left: 1px solid var(--dim); padding-left: 12px; animation: glitch 0.3s ease; }
         .timestamp { color: #666; font-size: 0.7rem; margin-right: 8px; font-weight: normal; }
 
-        /* FLOATING CONSOLE BAR - Responsive "Middle-Bottom" Position */
+        /* FLOATING CONSOLE BAR - Responsive, now with mobile adjustments */
         .console { 
             flex: 0 0 55px; display: flex; align-items: center; 
             padding: 0 1.2rem; background: var(--panel); 
-            margin: 0 20px calc(15vh + var(--safe-bottom)) 20px; /* ELEVATED POSITION */
+            /* Default margin: elevated from bottom, but will be overridden for small screens */
+            margin: 0 20px calc(10vh + var(--safe-bottom)) 20px; /* slightly reduced from 15vh for better mobile fit */
             border: 1px solid var(--neon); border-radius: 4px;
             box-shadow: 0 0 20px var(--dim);
             z-index: 20;
         }
 
+        /* Platform specific (mostly windows/desktop) */
         .platform-windows .console { margin: 10px 0 0 0; border-radius: 0; width: 100%; border-left: none; border-right: none; }
+
+        /* MOBILE RESIZE MEDIA QUERIES — IPHONE/ANDROID */
+        @media (max-width: 600px) {
+            header { padding: calc(0.7rem + var(--safe-top)) 0.8rem 0.7rem; }
+            .brand { font-size: 0.8rem; letter-spacing: 1.5px; }
+            .subbrand { font-size: 0.6rem; }
+            #chat-box { padding: 1rem 0.8rem; }
+            .entry { font-size: 0.75rem; padding-left: 8px; }
+            .timestamp { font-size: 0.6rem; margin-right: 4px; }
+            /* bring console closer to bottom, but keep it floating */
+            .console { 
+                margin: 0 12px calc(5vh + var(--safe-bottom)) 12px; 
+                height: 50px; 
+                padding: 0 0.8rem;
+            }
+            #msgInput { font-size: 16px; } /* prevents zoom on focus */
+            #theme-toggle { padding: 4px 8px; font-size: 0.6rem; }
+        }
+
+        /* for very short screens (landscape or small devices) */
+        @media (max-height: 500px) {
+            .console { margin: 0 12px 8px 12px; } /* almost at bottom */
+            header { padding-top: calc(0.3rem + var(--safe-top)); }
+        }
+
+        /* iPhone SE / small Android portrait tweak */
+        @media (max-width: 375px) {
+            .brand { font-size: 0.7rem; }
+            .console { margin: 0 8px calc(3vh + var(--safe-bottom)) 8px; }
+        }
 
         #msgInput { 
             flex: 1; background: transparent; border: none; 
@@ -84,13 +119,16 @@
             background: transparent; border: 1px solid var(--neon); 
             color: var(--neon); padding: 5px 12px; cursor: pointer; 
             font-size: 0.65rem; font-family: inherit; transition: all 0.2s;
+            /* improve tap target */
+            min-height: 36px; min-width: 36px;
         }
         #theme-toggle:hover { background: var(--neon); color: black; }
 
         /* LOCK SCREEN */
-        #lock-screen { position: fixed; inset: 0; background: #000; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+        #lock-screen { position: fixed; inset: 0; background: #000; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 1rem; }
         .lock-logo { font-size: 3rem; margin-bottom: 20px; filter: drop-shadow(0 0 10px var(--neon)); }
-        .warning-text { color: #ff3e3e; font-weight: bold; letter-spacing: 5px; margin-bottom: 5px; }
+        .warning-text { color: #ff3e3e; font-weight: bold; letter-spacing: 5px; margin-bottom: 5px; font-size: clamp(1rem, 5vw, 2rem); }
+        #instruction-text { font-size: clamp(0.6rem, 3vw, 0.8rem); opacity: 0.5; color: #fff; }
 
         @keyframes glitch {
             0% { transform: translate(2px,0); }
@@ -128,8 +166,8 @@
     else if (/android/.test(ua)) body.classList.add("platform-android");
     else body.classList.add("platform-windows");
 
-    // THEME CYCLER
-    const themes = ['', 'red', 'blue' , 'puple'];
+    // THEME CYCLER (fixed typo)
+    const themes = ['', 'red', 'blue', 'purple']; // corrected 'puple' to 'purple'
     let currentThemeIdx = 0;
     function cycleTheme() {
         currentThemeIdx = (currentThemeIdx + 1) % themes.length;
