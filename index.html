@@ -2,503 +2,184 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes, viewport-fit=cover">
-    <title>Rader Shadow</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>RADER.SHADOW.NET</title>
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
     <style>
-        /* Reset & base styles – modern messaging look */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
+        :root { 
+            --neon: #00ff41; 
+            --bg: #030303; 
+            --panel: rgba(0, 10, 0, 0.95);
+            --dim: rgba(0, 255, 65, 0.2); 
+            --border: #00ff41;
+            --safe-top: env(safe-area-inset-top);
+            --safe-bottom: env(safe-area-inset-bottom);
         }
 
-        body, html {
-            height: 100%;
-            width: 100%;
-            overflow: hidden;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-primary);
-            color: var(--text-primary);
-            transition: background-color 0.2s, color 0.2s;
+        /* THEMES */
+        [data-theme="red"] { --neon: #ff3e3e; --border: #ff3e3e; --dim: rgba(255, 62, 62, 0.2); }
+        [data-theme="blue"] { --neon: #00ccff; --border: #00ccff; --dim: rgba(0, 204, 255, 0.2); }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+        @keyframes scanline { 0% { bottom: 100%; } 100% { bottom: -100%; } }
+        @keyframes flicker { 
+            0% { opacity: 0.97; } 5% { opacity: 0.85; } 10% { opacity: 0.99; } 
+            100% { opacity: 1; } 
         }
 
-        /* Light / dark theme variables (default light) */
-        :root {
-            --bg-primary: #f5f5f5;
-            --bg-secondary: #ffffff;
-            --bg-input: #ffffff;
-            --text-primary: #111111;
-            --text-secondary: #5e5e5e;
-            --bubble-other: #e9e9eb;
-            --bubble-own: #007aff;
-            --bubble-own-text: white;
-            --border-light: #cccccc;
-            --header-bg: #ffffff;
-            --shadow: 0 2px 5px rgba(0,0,0,0.05);
+        body, html { 
+            background: var(--bg); color: var(--neon); 
+            font-family: 'Courier New', Courier, monospace;
+            height: 100%; width: 100%; overflow: hidden; 
+            display: flex; flex-direction: column;
+            text-transform: uppercase;
         }
 
-        [data-theme="dark"] {
-            --bg-primary: #1c1c1e;
-            --bg-secondary: #2c2c2e;
-            --bg-input: #3a3a3c;
-            --text-primary: #ffffff;
-            --text-secondary: #a9a9b0;
-            --bubble-other: #3a3a3c;
-            --bubble-own: #0a7aff;
-            --bubble-own-text: white;
-            --border-light: #38383a;
-            --header-bg: #1c1c1e;
-            --shadow: 0 2px 8px rgba(0,0,0,0.2);
+        /* CRT Effects */
+        .crt::after {
+            content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), 
+                        repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(0, 255, 65, 0.03) 1px, rgba(0, 255, 65, 0.03) 2px);
+            background-size: 100% 3px, 100% 100%; pointer-events: none; z-index: 10;
         }
 
-        /* Main layout */
-        .app {
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-            width: 100vw;
-            background-color: var(--bg-primary);
+        .app-wrapper { display: flex; flex-direction: column; height: 100vh; width: 100vw; visibility: hidden; animation: flicker 0.15s infinite; }
+
+        /* HEADER */
+        header { 
+            flex: 0 0 auto; padding: calc(1rem + var(--safe-top)) 1.5rem 1rem; 
+            display: flex; justify-content: space-between; align-items: center; 
+            background: var(--panel); border-bottom: 2px solid var(--border);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.8);
+        }
+        .brand { font-size: 1rem; font-weight: bold; text-shadow: 0 0 8px var(--neon); letter-spacing: 3px; }
+
+        /* CHAT AREA */
+        #chat-box { flex: 1; overflow-y: auto; padding: 1.5rem; display: flex; flex-direction: column; gap: 0.6rem; scroll-behavior: smooth; }
+        .entry { font-size: 0.88rem; line-height: 1.4; border-left: 1px solid var(--dim); padding-left: 12px; animation: glitch 0.3s ease; }
+        .timestamp { color: #666; font-size: 0.7rem; margin-right: 8px; font-weight: normal; }
+
+        /* FLOATING CONSOLE BAR - Responsive "Middle-Bottom" Position */
+        .console { 
+            flex: 0 0 55px; display: flex; align-items: center; 
+            padding: 0 1.2rem; background: var(--panel); 
+            margin: 0 20px calc(35vh + var(--safe-bottom)) 20px; /* ELEVATED POSITION */
+            border: 1px solid var(--neon); border-radius: 4px;
+            box-shadow: 0 0 20px var(--dim);
+            z-index: 20;
         }
 
-        /* Header – clean, like a chat header */
-        .chat-header {
-            background-color: var(--header-bg);
-            padding: 0.8rem 1rem;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            border-bottom: 1px solid var(--border-light);
-            box-shadow: var(--shadow);
-            flex-shrink: 0;
-        }
+        .platform-windows .console { margin: 10px 0 0 0; border-radius: 0; width: 100%; border-left: none; border-right: none; }
 
-        .chat-title {
-            font-weight: 600;
-            font-size: 1.1rem;
-            color: var(--text-primary);
+        #msgInput { 
+            flex: 1; background: transparent; border: none; 
+            color: var(--neon); outline: none; font-family: inherit; 
+            font-size: 16px; margin-left: 10px;
         }
+        #msgInput::placeholder { color: var(--dim); }
 
-        .chat-subtitle {
-            font-size: 0.7rem;
-            color: var(--text-secondary);
-            margin-top: 2px;
+        /* BUTTONS */
+        #theme-toggle { 
+            background: transparent; border: 1px solid var(--neon); 
+            color: var(--neon); padding: 5px 12px; cursor: pointer; 
+            font-size: 0.65rem; font-family: inherit; transition: all 0.2s;
         }
+        #theme-toggle:hover { background: var(--neon); color: black; }
 
-        .theme-toggle {
-            background: transparent;
-            border: 1px solid var(--border-light);
-            border-radius: 20px;
-            padding: 0.4rem 0.8rem;
-            font-size: 0.8rem;
-            color: var(--text-primary);
-            cursor: pointer;
-            transition: all 0.2s;
-        }
+        /* LOCK SCREEN */
+        #lock-screen { position: fixed; inset: 0; background: #000; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+        .lock-logo { font-size: 3rem; margin-bottom: 20px; filter: drop-shadow(0 0 10px var(--neon)); }
+        .warning-text { color: #ff3e3e; font-weight: bold; letter-spacing: 5px; margin-bottom: 5px; }
 
-        .theme-toggle:hover {
-            background: var(--bubble-other);
-        }
-
-        /* Chat area – message list */
-        .message-list {
-            flex: 1;
-            overflow-y: auto;
-            padding: 1rem 1rem 0.5rem 1rem;
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-            scroll-behavior: smooth;
-        }
-
-        /* Individual message row */
-        .message-row {
-            display: flex;
-            width: 100%;
-        }
-
-        .message-row.own {
-            justify-content: flex-end;
-        }
-
-        .message-row.other {
-            justify-content: flex-start;
-        }
-
-        /* Message bubble */
-        .bubble {
-            max-width: 80%;
-            padding: 0.6rem 1rem;
-            border-radius: 20px;
-            font-size: 0.95rem;
-            line-height: 1.4;
-            word-wrap: break-word;
-            position: relative;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-        }
-
-        .own .bubble {
-            background-color: var(--bubble-own);
-            color: var(--bubble-own-text);
-            border-bottom-right-radius: 4px;
-        }
-
-        .other .bubble {
-            background-color: var(--bubble-other);
-            color: var(--text-primary);
-            border-bottom-left-radius: 4px;
-        }
-
-        /* Timestamp inside bubble */
-        .timestamp {
-            font-size: 0.65rem;
-            opacity: 0.7;
-            margin-left: 0.5rem;
-            white-space: nowrap;
-            display: inline-block;
-            vertical-align: baseline;
-        }
-
-        .own .timestamp {
-            color: rgba(255,255,255,0.8);
-        }
-
-        .other .timestamp {
-            color: var(--text-secondary);
-        }
-
-        /* Input area – fixed at bottom */
-        .input-area {
-            background-color: var(--bg-secondary);
-            border-top: 1px solid var(--border-light);
-            padding: 0.75rem 1rem;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            flex-shrink: 0;
-            box-shadow: 0 -2px 5px rgba(0,0,0,0.02);
-        }
-
-        #msgInput {
-            flex: 1;
-            background-color: var(--bg-input);
-            border: 1px solid var(--border-light);
-            border-radius: 30px;
-            padding: 0.7rem 1.2rem;
-            font-size: 1rem;
-            color: var(--text-primary);
-            outline: none;
-            transition: border 0.2s;
-        }
-
-        #msgInput:focus {
-            border-color: var(--bubble-own);
-        }
-
-        #sendBtn {
-            background-color: var(--bubble-own);
-            border: none;
-            border-radius: 30px;
-            padding: 0.7rem 1.5rem;
-            font-size: 1rem;
-            font-weight: 500;
-            color: white;
-            cursor: pointer;
-            transition: opacity 0.2s;
-            white-space: nowrap;
-        }
-
-        #sendBtn:active {
-            opacity: 0.7;
-        }
-
-        /* Lock screen / loading */
-        #lock-screen {
-            position: fixed;
-            inset: 0;
-            background-color: var(--bg-primary);
-            z-index: 9999;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            padding: 2rem;
-            gap: 1rem;
-            transition: background 0.2s;
-        }
-
-        .lock-logo {
-            font-size: 3rem;
-            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1));
-        }
-
-        .warning-text {
-            font-size: 1.5rem;
-            font-weight: 600;
-            color: #ff3b30;
-        }
-
-        #instruction-text {
-            font-size: 0.9rem;
-            color: var(--text-secondary);
-        }
-
-        /* ========== COMPACT LAYOUT FOR SMALL SCREENS ========== */
-        @media (max-width: 480px) {
-            .chat-header {
-                padding: 0.5rem 0.75rem;
-            }
-            .chat-title {
-                font-size: 0.95rem;
-            }
-            .chat-subtitle {
-                font-size: 0.6rem;
-            }
-            .theme-toggle {
-                padding: 0.3rem 0.6rem;
-                font-size: 0.7rem;
-            }
-            .message-list {
-                padding: 0.75rem 0.75rem 0.25rem 0.75rem;
-                gap: 0.4rem;
-            }
-            .bubble {
-                max-width: 90%;
-                padding: 0.45rem 0.85rem;
-                font-size: 0.85rem;
-                border-radius: 18px;
-            }
-            .timestamp {
-                font-size: 0.55rem;
-                margin-left: 0.3rem;
-            }
-            .input-area {
-                padding: 0.5rem 0.75rem;
-                gap: 0.5rem;
-            }
-            #msgInput {
-                padding: 0.55rem 1rem;
-                font-size: 0.95rem;
-            }
-            #sendBtn {
-                padding: 0.55rem 1.2rem;
-                font-size: 0.95rem;
-            }
-        }
-
-        /* Extra small screens (e.g., iPhone SE 1st gen) */
-        @media (max-width: 375px) {
-            .chat-title {
-                font-size: 0.85rem;
-            }
-            .bubble {
-                padding: 0.4rem 0.7rem;
-                font-size: 0.8rem;
-            }
-            .timestamp {
-                font-size: 0.5rem;
-            }
-            #msgInput {
-                padding: 0.5rem 0.9rem;
-                font-size: 0.9rem;
-            }
-            #sendBtn {
-                padding: 0.5rem 1rem;
-                font-size: 0.9rem;
-            }
-        }
-
-        /* Landscape orientation & very short screens */
-        @media (max-height: 500px) and (orientation: landscape) {
-            .chat-header {
-                padding: 0.3rem 0.75rem;
-            }
-            .message-list {
-                padding: 0.5rem 0.75rem;
-            }
-            .bubble {
-                padding: 0.3rem 0.7rem;
-                font-size: 0.8rem;
-            }
-            .input-area {
-                padding: 0.3rem 0.75rem;
-            }
-            #msgInput {
-                padding: 0.4rem 0.9rem;
-                font-size: 0.9rem;
-            }
-            #sendBtn {
-                padding: 0.4rem 1rem;
-                font-size: 0.9rem;
-            }
+        @keyframes glitch {
+            0% { transform: translate(2px,0); }
+            50% { transform: translate(-2px,0); }
+            100% { transform: translate(0); }
         }
     </style>
 </head>
-<body>
-    <!-- Lock screen (shown until valid hash) -->
-    <div id="lock-screen">
-        <div class="lock-logo">💬</div>
-        <div class="warning-text" id="status-msg">CONNECTING</div>
-        <div id="instruction-text">div>
+<body class="crt">
+
+<div id="lock-screen">
+    <div class="lock-logo">⚡</div>
+    <div class="warning-text" id="status-msg">SYSTEM ENCRYPTED</div>
+    <div id="instruction-text" style="font-size: 0.7rem; opacity: 0.5; color: #fff;">ESTABLISHING P2P PROXY...</div>
+</div>
+
+<div class="app-wrapper" id="app-ui">
+    <header>
+        <div class="brand">RaderSHADOW.NET</div>
+            <div class="subbrand">DISCORD=https://discord.gg/KN9PtxZjk</div>
+        <button id="theme-toggle" onclick="cycleTheme()">CYC_MODE</button>
+    </header>
+    <div id="chat-box"></div>
+    <div class="console">
+        <span style="opacity: 0.8;">[>>]></span>
+        <input type="text" id="msgInput" placeholder="AWAITING INPUT..." autocomplete="on">
     </div>
+</div>
 
-    <!-- Main app UI (hidden until auth) -->
-    <div class="app" id="app-ui" style="display: none;">
-        <!-- Simple header -->
-        <div class="chat-header">
-            <div>
-                <div class="chat-title">Rader Shadow</div>
-                <div class="chat-subtitle">discord.gg/KN9PtxZjk</div>
-            </div>
-            <button class="theme-toggle" id="themeToggle">🌙 Dark</button>
-        </div>
+<script>
+    // PLATFORM DETECTION
+    const ua = navigator.userAgent.toLowerCase();
+    const body = document.body;
+    if (/iphone|ipad|ipod/.test(ua)) body.classList.add("platform-ios");
+    else if (/android/.test(ua)) body.classList.add("platform-android");
+    else body.classList.add("platform-windows");
 
-        <!-- Message list container -->
-        <div id="chat-box" class="message-list"></div>
+    // THEME CYCLER
+    const themes = ['', 'red', 'blue' , 'puple'];
+    let currentThemeIdx = 0;
+    function cycleTheme() {
+        currentThemeIdx = (currentThemeIdx + 1) % themes.length;
+        document.documentElement.setAttribute('data-theme', themes[currentThemeIdx]);
+    }
 
-        <!-- Input area with send button -->
-        <div class="input-area">
-            <input type="text" id="msgInput" placeholder="Message" autocomplete="off">
-            <button id="sendBtn">Send</button>
-        </div>
-    </div>
+    // CONFIG & CONNECT
+    const API_KEY = '8aNVog.se0xuQ:cPGNxEHS92b0xGqx6PpT1jRNDCVD0Y5DFX_6A45BtkA';
+    const ACTIVE_CHANNELS = ['rader-2244']; 
+    const hashKey = window.location.hash.substring(1).toLowerCase();
 
-    <script>
-        (function() {
-            // ----- Theme handling (light/dark) -----
-            const themes = ['light', 'dark'];
-            let currentThemeIdx = 0; // 0 = light (default)
+    const appUI = document.getElementById('app-ui');
+    const lockScreen = document.getElementById('lock-screen');
 
-            function cycleTheme() {
-                currentThemeIdx = (currentThemeIdx + 1) % themes.length;
-                const newTheme = themes[currentThemeIdx];
-                document.documentElement.setAttribute('data-theme', newTheme);
-                // Update button text
-                const toggleBtn = document.getElementById('themeToggle');
-                if (toggleBtn) {
-                    toggleBtn.textContent = newTheme === 'dark' ? '☀️ Light' : '🌙 Dark';
-                }
+    if (ACTIVE_CHANNELS.includes(hashKey)) {
+        setTimeout(() => {
+            lockScreen.style.display = 'none';
+            appUI.style.visibility = 'visible';
+            connectToNetwork(hashKey);
+        }, 1500); // Dramatic pause
+    } else {
+        document.getElementById('status-msg').textContent = "SIGNAL LOST";
+        document.getElementById('instruction-text').textContent = "AUTH_TOKEN_MISSING";
+    }
+
+    function connectToNetwork(key) {
+        const alias = prompt("IDENTIFY AS?:") || "GHOST_" + Math.random().toString(16).slice(2, 6);
+        const ably = new Ably.Realtime(API_KEY);
+        const channel = ably.channels.get(`rader-v4-${key}`);
+        const chatBox = document.getElementById('chat-box');
+        const input = document.getElementById('msgInput');
+
+        channel.subscribe('msg', (p) => {
+            const entry = document.createElement('div');
+            entry.className = 'entry';
+            const hexTime = new Date().getTime().toString(16).slice(-6).toUpperCase();
+            entry.innerHTML = `<span class="timestamp">[0x${hexTime}]</span> <b style="color:var(--neon)">${p.data.user}</b>: ${p.data.text}`;
+            chatBox.appendChild(entry);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            
+            // Subtle sound effect simulation could go here
+        });
+
+        input.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && input.value.trim()) {
+                channel.publish('msg', { user: alias, text: input.value });
+                input.value = '';
             }
-
-            // Set default theme (light) and ensure attribute is set
-            document.documentElement.setAttribute('data-theme', 'light');
-
-            // ----- Platform detection (for any special tweaks, not essential) -----
-            const ua = navigator.userAgent.toLowerCase();
-            const isMobile = /iphone|ipad|ipod|android/.test(ua);
-
-            // ----- Ably configuration -----
-            const API_KEY = '8aNVog.se0xuQ:cPGNxEHS92b0xGqx6PpT1jRNDCVD0Y5DFX_6A45BtkA';
-            const ACTIVE_CHANNELS = ['rader-2244'];
-            const hashKey = window.location.hash.substring(1).toLowerCase();
-
-            const appUI = document.getElementById('app-ui');
-            const lockScreen = document.getElementById('lock-screen');
-            const statusMsg = document.getElementById('status-msg');
-            const instructionText = document.getElementById('instruction-text');
-
-            // Check for valid channel hash
-            if (ACTIVE_CHANNELS.includes(hashKey)) {
-                // Show app after a short delay (smooth transition)
-                setTimeout(() => {
-                    lockScreen.style.display = 'none';
-                    appUI.style.display = 'flex';  // app uses flex layout
-                    connectToNetwork(hashKey);
-                }, 800);
-            } else {
-                statusMsg.textContent = "⚠️ Invalid link";
-                instructionText.textContent = "Please use #rader-2244 in the URL";
-            }
-
-            // Global variable to store current user alias
-            let currentUserAlias = '';
-
-            function connectToNetwork(channelKey) {
-                // Ask for alias (modern prompt)
-                let alias = prompt("Enter your display name:", "Guest_" + Math.random().toString(36).slice(2, 6));
-                if (!alias || alias.trim() === '') {
-                    alias = "Anonymous_" + Math.floor(Math.random() * 1000);
-                }
-                currentUserAlias = alias.trim();
-
-                // Initialize Ably
-                const ably = new Ably.Realtime(API_KEY);
-                const channel = ably.channels.get(`rader-v4-${channelKey}`);
-                const chatBox = document.getElementById('chat-box');
-                const msgInput = document.getElementById('msgInput');
-                const sendBtn = document.getElementById('sendBtn');
-
-                // Function to append a message to the chat
-                function appendMessage(user, text, isOwn) {
-                    const row = document.createElement('div');
-                    row.className = `message-row ${isOwn ? 'own' : 'other'}`;
-
-                    const bubble = document.createElement('div');
-                    bubble.className = 'bubble';
-
-                    // Message text
-                    const textSpan = document.createElement('span');
-                    textSpan.textContent = text;
-                    bubble.appendChild(textSpan);
-
-                    // Timestamp (HH:MM)
-                    const time = new Date();
-                    const timeStr = time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    const timeSpan = document.createElement('span');
-                    timeSpan.className = 'timestamp';
-                    timeSpan.textContent = timeStr;
-                    bubble.appendChild(timeSpan);
-
-                    row.appendChild(bubble);
-                    chatBox.appendChild(row);
-
-                    // Scroll to bottom
-                    chatBox.scrollTop = chatBox.scrollHeight;
-                }
-
-                // Subscribe to incoming messages
-                channel.subscribe('msg', (msg) => {
-                    const data = msg.data;
-                    const isOwn = (data.user === currentUserAlias);
-                    appendMessage(data.user, data.text, isOwn);
-                });
-
-                // Function to send a message
-                function sendMessage() {
-                    const text = msgInput.value.trim();
-                    if (text === '') return;
-                    // Publish to channel
-                    channel.publish('msg', { user: currentUserAlias, text: text });
-                    msgInput.value = ''; // clear input
-                }
-
-                // Event listeners
-                msgInput.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        sendMessage();
-                    }
-                });
-
-                sendBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    sendMessage();
-                });
-
-                // Optional: add a system message when joining
-                // (could be a join alert, but not necessary)
-            }
-
-            // Theme toggle button listener (attached after app UI is visible)
-            document.getElementById('themeToggle')?.addEventListener('click', cycleTheme);
-
-            // Also ensure the theme toggle works if the button is dynamically added later? 
-            // But it's already in the static HTML inside #app-ui, so it's fine.
-            // However, the button exists only after app UI is visible. The listener can be attached now, as the element exists in DOM (hidden).
-            // So we attach listener after DOM ready.
-        })();
-    </script>
+        });
+    }
+</script>
 </body>
 </html>
