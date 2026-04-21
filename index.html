@@ -3,183 +3,668 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>RADER.SHADOW.NET</title>
+    <title>RADER.SHADOW.NET | Encrypted Terminal Chat</title>
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
     <style>
-        :root { 
-            --neon: #00ff41; 
-            --bg: #030303; 
-            --panel: rgba(0, 10, 0, 0.95);
-            --dim: rgba(0, 255, 65, 0.2); 
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        :root {
+            --neon: #00ff41;
+            --neon-glow: rgba(0, 255, 65, 0.4);
+            --bg: #030303;
+            --panel: rgba(0, 8, 0, 0.92);
+            --dim: rgba(0, 255, 65, 0.2);
             --border: #00ff41;
+            --text-dim: #9bff9b;
+            --error: #ff3e3e;
             --safe-top: env(safe-area-inset-top);
             --safe-bottom: env(safe-area-inset-bottom);
         }
 
         /* THEMES */
-        [data-theme="red"] { --neon: #ff3e3e; --border: #ff3e3e; --dim: rgba(255, 62, 62, 0.2); }
-        [data-theme="blue"] { --neon: #00ccff; --border: #00ccff; --dim: rgba(0, 204, 255, 0.2); }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-
-        @keyframes scanline { 0% { bottom: 100%; } 100% { bottom: -100%; } }
-        @keyframes flicker { 
-            0% { opacity: 0.97; } 5% { opacity: 0.85; } 10% { opacity: 0.99; } 
-            100% { opacity: 1; } 
+        [data-theme="red"] {
+            --neon: #ff3e3e;
+            --border: #ff3e3e;
+            --neon-glow: rgba(255, 62, 62, 0.4);
+            --dim: rgba(255, 62, 62, 0.2);
+            --text-dim: #ffaaaa;
+        }
+        [data-theme="blue"] {
+            --neon: #00ccff;
+            --border: #00ccff;
+            --neon-glow: rgba(0, 204, 255, 0.4);
+            --dim: rgba(0, 204, 255, 0.2);
+            --text-dim: #aae6ff;
+        }
+        [data-theme="purple"] {
+            --neon: #c15eff;
+            --border: #c15eff;
+            --neon-glow: rgba(193, 94, 255, 0.4);
+            --dim: rgba(193, 94, 255, 0.2);
+            --text-dim: #e2c2ff;
         }
 
-        body, html { 
-            background: var(--bg); color: var(--neon); 
-            font-family: 'Courier New', Courier, monospace;
-            height: 100%; width: 100%; overflow: hidden; 
-            display: flex; flex-direction: column;
-            text-transform: uppercase;
+        body {
+            background: var(--bg);
+            color: var(--neon);
+            font-family: 'Courier New', 'Fira Code', monospace;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            position: relative;
         }
 
-        /* CRT Effects */
-        .crt::after {
-            content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.1) 50%), 
-                        repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(0, 255, 65, 0.03) 1px, rgba(0, 255, 65, 0.03) 2px);
-            background-size: 100% 3px, 100% 100%; pointer-events: none; z-index: 10;
+        /* CRT SCAN EFFECT */
+        .crt::before {
+            content: " ";
+            display: block;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(0deg, rgba(0, 255, 65, 0.02) 0px, rgba(0, 255, 65, 0.02) 2px, transparent 2px, transparent 6px);
+            pointer-events: none;
+            z-index: 5;
         }
 
-        .app-wrapper { display: flex; flex-direction: column; height: 100vh; width: 100vw; visibility: hidden; animation: flicker 0.15s infinite; }
+        /* MAIN APP LAYOUT */
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            width: 100vw;
+            background: var(--bg);
+            position: relative;
+            z-index: 2;
+        }
 
         /* HEADER */
-        header { 
-            flex: 0 0 auto; padding: calc(1rem + var(--safe-top)) 1.5rem 1rem; 
-            display: flex; justify-content: space-between; align-items: center; 
-            background: var(--panel); border-bottom: 2px solid var(--border);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.8);
+        .terminal-header {
+            flex-shrink: 0;
+            padding: calc(0.8rem + var(--safe-top)) 1.5rem 0.8rem 1.5rem;
+            background: var(--panel);
+            border-bottom: 2px solid var(--border);
+            box-shadow: 0 0 15px var(--neon-glow);
+            backdrop-filter: blur(2px);
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 12px;
         }
-        .brand { font-size: 1rem; font-weight: bold; text-shadow: 0 0 8px var(--neon); letter-spacing: 3px; }
-
-        /* CHAT AREA */
-        #chat-box { flex: 1; overflow-y: auto; padding: 1.5rem; display: flex; flex-direction: column; gap: 0.6rem; scroll-behavior: smooth; }
-        .entry { font-size: 0.88rem; line-height: 1.4; border-left: 1px solid var(--dim); padding-left: 12px; animation: glitch 0.3s ease; }
-        .timestamp { color: #666; font-size: 0.7rem; margin-right: 8px; font-weight: normal; }
-
-        /* FLOATING CONSOLE BAR - Responsive "Middle-Bottom" Position */
-        .console { 
-            flex: 0 0 55px; display: flex; align-items: center; 
-            padding: 0 1.2rem; background: var(--panel); 
-            margin: 0 20px calc(50vh + var(--safe-bottom)) 20px; /* ELEVATED POSITION */
-            border: 1px solid var(--neon); border-radius: 4px;
-            box-shadow: 0 0 20px var(--dim);
-            z-index: 20;
+        .brand {
+            font-size: 1.25rem;
+            font-weight: bold;
+            letter-spacing: 2px;
+            text-shadow: 0 0 6px var(--neon);
+        }
+        .channel-badge {
+            font-size: 0.7rem;
+            background: var(--dim);
+            padding: 4px 10px;
+            border-radius: 20px;
+            border-left: 2px solid var(--neon);
+            font-family: monospace;
+        }
+        .status-pill {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-left: auto;
+        }
+        .connection-led {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #ff5e5e;
+            box-shadow: 0 0 5px currentColor;
+            transition: all 0.2s;
+        }
+        .connection-led.online {
+            background: var(--neon);
+            box-shadow: 0 0 8px var(--neon);
+        }
+        .action-btn {
+            background: transparent;
+            border: 1px solid var(--neon);
+            color: var(--neon);
+            padding: 4px 12px;
+            font-family: inherit;
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: 0.2s;
+            border-radius: 2px;
+        }
+        .action-btn:hover {
+            background: var(--neon);
+            color: black;
+            box-shadow: 0 0 6px var(--neon);
+        }
+        .discord-link {
+            color: var(--neon);
+            text-decoration: none;
+            font-size: 0.7rem;
+            border-bottom: 1px dashed var(--dim);
         }
 
-        .platform-windows .console { margin: 10px 0 0 0; border-radius: 0; width: 100%; border-left: none; border-right: none; }
-
-        #msgInput { 
-            flex: 1; background: transparent; border: none; 
-            color: var(--neon); outline: none; font-family: inherit; 
-            font-size: 16px; margin-left: 10px;
+        /* CHAT MESSAGES AREA */
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.65rem;
+            scroll-behavior: smooth;
         }
-        #msgInput::placeholder { color: var(--dim); }
-
-        /* BUTTONS */
-        #theme-toggle { 
-            background: transparent; border: 1px solid var(--neon); 
-            color: var(--neon); padding: 5px 12px; cursor: pointer; 
-            font-size: 0.65rem; font-family: inherit; transition: all 0.2s;
+        .message {
+            font-size: 0.85rem;
+            line-height: 1.4;
+            border-left: 2px solid var(--neon);
+            padding-left: 12px;
+            word-break: break-word;
+            animation: fadeSlide 0.2s ease;
+            color: var(--text-dim);
         }
-        #theme-toggle:hover { background: var(--neon); color: black; }
+        .message.system {
+            border-left-color: var(--dim);
+            opacity: 0.7;
+            font-style: italic;
+            font-size: 0.75rem;
+        }
+        .timestamp {
+            color: #6f6f6f;
+            font-size: 0.65rem;
+            margin-right: 10px;
+            letter-spacing: 0.5px;
+        }
+        .username {
+            font-weight: bold;
+            color: var(--neon);
+            margin-right: 8px;
+        }
 
-        /* LOCK SCREEN */
-        #lock-screen { position: fixed; inset: 0; background: #000; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
-        .lock-logo { font-size: 3rem; margin-bottom: 20px; filter: drop-shadow(0 0 10px var(--neon)); }
-        .warning-text { color: #ff3e3e; font-weight: bold; letter-spacing: 5px; margin-bottom: 5px; }
+        /* INPUT CONSOLE BAR */
+        .input-console {
+            flex-shrink: 0;
+            background: var(--panel);
+            border-top: 1px solid var(--border);
+            padding: 10px 16px calc(12px + var(--safe-bottom));
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            backdrop-filter: blur(4px);
+        }
+        .prompt-symbol {
+            font-size: 1.2rem;
+            opacity: 0.9;
+            font-weight: bold;
+        }
+        #messageInput {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: var(--neon);
+            font-family: 'Courier New', monospace;
+            font-size: 1rem;
+            outline: none;
+            padding: 8px 0;
+        }
+        #messageInput::placeholder {
+            color: var(--dim);
+            font-size: 0.85rem;
+        }
+        .send-btn {
+            background: transparent;
+            border: 1px solid var(--neon);
+            color: var(--neon);
+            padding: 6px 14px;
+            font-family: monospace;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+            border-radius: 2px;
+        }
+        .send-btn:active {
+            background: var(--neon);
+            color: black;
+        }
 
-        @keyframes glitch {
-            0% { transform: translate(2px,0); }
-            50% { transform: translate(-2px,0); }
-            100% { transform: translate(0); }
+        /* JOIN OVERLAY (LOCK SCREEN REDESIGN) */
+        .join-overlay {
+            position: fixed;
+            inset: 0;
+            background: #000000dd;
+            backdrop-filter: blur(8px);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: monospace;
+            transition: opacity 0.4s;
+        }
+        .join-card {
+            background: var(--panel);
+            border: 1.5px solid var(--neon);
+            padding: 2rem 1.8rem;
+            width: 90%;
+            max-width: 420px;
+            text-align: center;
+            box-shadow: 0 0 40px var(--neon-glow);
+            border-radius: 8px;
+        }
+        .join-card h2 {
+            font-size: 1.6rem;
+            letter-spacing: 2px;
+            margin-bottom: 0.8rem;
+        }
+        .join-card .glowing {
+            color: var(--neon);
+            text-shadow: 0 0 4px var(--neon);
+        }
+        .input-group {
+            margin: 1.2rem 0;
+            text-align: left;
+        }
+        .input-group label {
+            font-size: 0.7rem;
+            opacity: 0.7;
+            display: block;
+            margin-bottom: 5px;
+        }
+        .join-input {
+            width: 100%;
+            background: #0a0f0a;
+            border: 1px solid var(--neon);
+            padding: 10px 12px;
+            color: var(--neon);
+            font-family: monospace;
+            font-size: 0.9rem;
+            outline: none;
+        }
+        .join-btn {
+            background: transparent;
+            border: 1px solid var(--neon);
+            color: var(--neon);
+            padding: 10px 24px;
+            margin-top: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+            width: 100%;
+        }
+        .join-btn:hover {
+            background: var(--neon);
+            color: black;
+            box-shadow: 0 0 10px var(--neon);
+        }
+        .error-msg {
+            color: var(--error);
+            font-size: 0.7rem;
+            margin-top: 8px;
+        }
+
+        @keyframes fadeSlide {
+            from {
+                opacity: 0;
+                transform: translateX(-6px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        /* SCROLLBAR */
+        .chat-messages::-webkit-scrollbar {
+            width: 4px;
+        }
+        .chat-messages::-webkit-scrollbar-track {
+            background: #0a0f0a;
+        }
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: var(--neon);
         }
     </style>
 </head>
 <body class="crt">
 
-<div id="lock-screen">
-    <div class="lock-logo">⚡</div>
-    <div class="warning-text" id="status-msg">SYSTEM ENCRYPTED</div>
-    <div id="instruction-text" style="font-size: 0.7rem; opacity: 0.5; color: #fff;">ESTABLISHING P2P PROXY...</div>
+<div id="joinOverlay" class="join-overlay">
+    <div class="join-card">
+        <div class="glowing">⚡ RADER.SHADOW.NET ⚡</div>
+        <h2 style="font-size:1rem; margin-top:12px;">ENCRYPTED TERMINAL</h2>
+        <div class="input-group">
+            <label>CHANNEL / ROOM</label>
+            <input type="text" id="roomInput" class="join-input" placeholder="rader-2244" value="rader-2244">
+        </div>
+        <div class="input-group">
+            <label>ALIAS (IDENTITY)</label>
+            <input type="text" id="aliasInput" class="join-input" placeholder="GHOST_47" value="">
+        </div>
+        <button id="connectBtn" class="join-btn">⟁ CONNECT TO NETWORK</button>
+        <div id="joinError" class="error-msg"></div>
+        <div style="font-size: 0.6rem; margin-top: 16px; opacity:0.5;">P2P MESH | REAL-TIME CIPHER</div>
+    </div>
 </div>
 
-<div class="app-wrapper" id="app-ui">
-    <header>
-        <div class="brand">RaderSHADOW.NET</div>
-            <div class="subbrand">DISCORD=https://discord.gg/KN9PtxZjk</div>
-        <button id="theme-toggle" onclick="cycleTheme()">CYC_MODE</button>
+<div id="appUI" class="app-container" style="display: none;">
+    <header class="terminal-header">
+        <div class="brand">[R.SHADOW.net]</div>
+        <div class="channel-badge" id="roomDisplay">channel: --</div>
+        <div class="status-pill">
+            <span id="connectionLed" class="connection-led"></span>
+            <span id="connStatusText" style="font-size:0.7rem;">OFFLINE</span>
+            <button id="themeToggleBtn" class="action-btn">CYCLE_MODE</button>
+            <button id="switchRoomBtn" class="action-btn">⟳ EXIT</button>
+        </div>
     </header>
-    <div id="chat-box"></div>
-    <div class="console">
-        <span style="opacity: 0.8;">[>>]></span>
-        <input type="text" id="msgInput" placeholder="AWAITING INPUT..." autocomplete="on">
+    <div id="chatContainer" class="chat-messages"></div>
+    <div class="input-console">
+        <span class="prompt-symbol">[>>]></span>
+        <input type="text" id="messageInput" placeholder="TRANSMIT MESSAGE..." autocomplete="off">
+        <button id="sendMessageBtn" class="send-btn">SEND</button>
     </div>
 </div>
 
 <script>
-    // PLATFORM DETECTION
-    const ua = navigator.userAgent.toLowerCase();
-    const body = document.body;
-    if (/iphone|ipad|ipod/.test(ua)) body.classList.add("platform-ios");
-    else if (/android/.test(ua)) body.classList.add("platform-android");
-    else body.classList.add("platform-windows");
-
-    // THEME CYCLER
-    const themes = ['', 'red', 'blue' , 'puple'];
-    let currentThemeIdx = 0;
-    function cycleTheme() {
-        currentThemeIdx = (currentThemeIdx + 1) % themes.length;
-        document.documentElement.setAttribute('data-theme', themes[currentThemeIdx]);
-    }
-
-    // CONFIG & CONNECT
+    // ---------------------- GLOBALS --------------------------
+    let ablyClient = null;
+    let currentChannel = null;
+    let currentRoom = null;
+    let currentAlias = null;
+    let isConnected = false;
+    let presenceSubscribed = false;
+    
     const API_KEY = '8aNVog.se0xuQ:cPGNxEHS92b0xGqx6PpT1jRNDCVD0Y5DFX_6A45BtkA';
-    const ACTIVE_CHANNELS = ['rader-2244']; 
-    const hashKey = window.location.hash.substring(1).toLowerCase();
+    const chatContainer = document.getElementById('chatContainer');
+    const appUI = document.getElementById('appUI');
+    const joinOverlay = document.getElementById('joinOverlay');
+    const roomDisplaySpan = document.getElementById('roomDisplay');
+    const connectionLed = document.getElementById('connectionLed');
+    const connStatusText = document.getElementById('connStatusText');
+    const joinErrorSpan = document.getElementById('joinError');
+    const roomInput = document.getElementById('roomInput');
+    const aliasInput = document.getElementById('aliasInput');
+    const connectBtn = document.getElementById('connectBtn');
+    const messageInput = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendMessageBtn');
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    const switchRoomBtn = document.getElementById('switchRoomBtn');
 
-    const appUI = document.getElementById('app-ui');
-    const lockScreen = document.getElementById('lock-screen');
+    // Theme system
+    const themes = ['', 'red', 'blue', 'purple'];
+    let themeIndex = 0;
+    function cycleTheme() {
+        themeIndex = (themeIndex + 1) % themes.length;
+        const themeVal = themes[themeIndex];
+        if (themeVal) {
+            document.documentElement.setAttribute('data-theme', themeVal);
+        } else {
+            document.documentElement.removeAttribute('data-theme');
+        }
+    }
+    themeToggleBtn.addEventListener('click', cycleTheme);
 
-    if (ACTIVE_CHANNELS.includes(hashKey)) {
-        setTimeout(() => {
-            lockScreen.style.display = 'none';
-            appUI.style.visibility = 'visible';
-            connectToNetwork(hashKey);
-        }, 1500); // Dramatic pause
-    } else {
-        document.getElementById('status-msg').textContent = "SIGNAL LOST";
-        document.getElementById('instruction-text').textContent = "AUTH_TOKEN_MISSING";
+    // Helper: system message in chat
+    function addSystemMessage(text, isError = false) {
+        if (!chatContainer) return;
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'message system';
+        const timeHex = new Date().getTime().toString(16).slice(-6).toUpperCase();
+        msgDiv.innerHTML = `<span class="timestamp">[0x${timeHex}]</span> <span style="color: ${isError ? '#ff5e5e' : 'var(--neon)'};">⛓️ ${escapeHtml(text)}</span>`;
+        chatContainer.appendChild(msgDiv);
+        msgDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
-    function connectToNetwork(key) {
-        const alias = prompt("IDENTIFY AS?:") || "GHOST_" + Math.random().toString(16).slice(2, 6);
-        const ably = new Ably.Realtime(API_KEY);
-        const channel = ably.channels.get(`rader-v4-${key}`);
-        const chatBox = document.getElementById('chat-box');
-        const input = document.getElementById('msgInput');
+    function addChatMessage(user, text, isOwn = false) {
+        if (!chatContainer) return;
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'message';
+        const timeHex = new Date().getTime().toString(16).slice(-6).toUpperCase();
+        msgDiv.innerHTML = `<span class="timestamp">[0x${timeHex}]</span> <span class="username">${escapeHtml(user)}</span>: ${escapeHtml(text)}`;
+        chatContainer.appendChild(msgDiv);
+        msgDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
 
-        channel.subscribe('msg', (p) => {
-            const entry = document.createElement('div');
-            entry.className = 'entry';
-            const hexTime = new Date().getTime().toString(16).slice(-6).toUpperCase();
-            entry.innerHTML = `<span class="timestamp">[0x${hexTime}]</span> <b style="color:var(--neon)">${p.data.user}</b>: ${p.data.text}`;
-            chatBox.appendChild(entry);
-            chatBox.scrollTop = chatBox.scrollHeight;
-            
-            // Subtle sound effect simulation could go here
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        }).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, function(c) {
+            return c;
+        });
+    }
+
+    // Update connection status UI
+    function setConnectionStatus(online) {
+        isConnected = online;
+        if (online) {
+            connectionLed.classList.add('online');
+            connStatusText.innerText = 'ONLINE';
+        } else {
+            connectionLed.classList.remove('online');
+            connStatusText.innerText = 'OFFLINE';
+        }
+    }
+
+    // Cleanup previous connection
+    async function disconnectAndCleanup() {
+        if (currentChannel) {
+            try {
+                if (presenceSubscribed && currentChannel.presence) {
+                    await currentChannel.presence.leave({ alias: currentAlias });
+                }
+                await currentChannel.detach();
+            } catch(e) { console.warn(e); }
+            currentChannel = null;
+        }
+        if (ablyClient) {
+            try {
+                ablyClient.close();
+            } catch(e) {}
+            ablyClient = null;
+        }
+        presenceSubscribed = false;
+    }
+
+    // Initialize connection to Ably room
+    async function establishConnection(roomName, alias) {
+        if (!roomName || !alias) {
+            throw new Error('CHANNEL & ALIAS REQUIRED');
+        }
+        const sanitizedRoom = roomName.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+        if (sanitizedRoom.length === 0) throw new Error('Invalid channel name');
+        const finalAlias = alias.trim().slice(0, 24) || `agent_${Math.floor(Math.random()*1000)}`;
+
+        // Clean any existing connection
+        await disconnectAndCleanup();
+
+        // Create Ably client with clientId for presence
+        ablyClient = new Ably.Realtime({
+            key: API_KEY,
+            clientId: finalAlias
         });
 
-        input.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter' && input.value.trim()) {
-                channel.publish('msg', { user: alias, text: input.value });
-                input.value = '';
+        // Channel with prefix (consistent naming)
+        const fullChannelName = `rader-v4-${sanitizedRoom}`;
+        currentChannel = ablyClient.channels.get(fullChannelName);
+        currentRoom = sanitizedRoom;
+        currentAlias = finalAlias;
+
+        // Connection state monitoring
+        ablyClient.connection.on((stateChange) => {
+            if (stateChange.current === 'connected') {
+                setConnectionStatus(true);
+                addSystemMessage(`>> LINK ESTABLISHED : ${fullChannelName} as ${finalAlias}`);
+                // re-enter presence if needed
+                if (currentChannel && currentChannel.presence) {
+                    currentChannel.presence.enter({ alias: finalAlias }).catch(e => console.warn);
+                }
+            } else if (stateChange.current === 'disconnected') {
+                setConnectionStatus(false);
+                addSystemMessage(`! CARRIER LOST - RECONNECTING`, true);
+            } else if (stateChange.current === 'failed') {
+                setConnectionStatus(false);
+                addSystemMessage(`✖ FATAL: CONNECTION FAILED`, true);
             }
         });
+
+        // Attach channel
+        await new Promise((resolve, reject) => {
+            currentChannel.attach((err) => {
+                if (err) reject(new Error(`Channel attach error: ${err.message}`));
+                else resolve();
+            });
+        });
+
+        // Subscribe to chat messages
+        currentChannel.subscribe('msg', (message) => {
+            const data = message.data;
+            if (data && data.user && data.text) {
+                addChatMessage(data.user, data.text);
+            }
+        });
+
+        // PRESENCE: Show join / leave events
+        await currentChannel.presence.enter({ alias: finalAlias });
+        presenceSubscribed = true;
+
+        currentChannel.presence.subscribe('enter', (presenceMsg) => {
+            if (presenceMsg.clientId !== ablyClient.auth.clientId) {
+                const userAlias = presenceMsg.data?.alias || presenceMsg.clientId;
+                addSystemMessage(`++ ${userAlias} joined the network`);
+            }
+        });
+        currentChannel.presence.subscribe('leave', (presenceMsg) => {
+            if (presenceMsg.clientId !== ablyClient.auth.clientId) {
+                const userAlias = presenceMsg.data?.alias || presenceMsg.clientId;
+                addSystemMessage(`-- ${userAlias} left the network`);
+            }
+        });
+
+        // Update UI display
+        roomDisplaySpan.innerText = `#${sanitizedRoom} | @${finalAlias}`;
+        setConnectionStatus(true);
+        
+        // Clear chat container for fresh start
+        while (chatContainer.firstChild) chatContainer.removeChild(chatContainer.firstChild);
+        addSystemMessage(`🔒 SECURE TERMINAL ACTIVE | ROOM: ${sanitizedRoom} | ALIAS: ${finalAlias}`);
+        addSystemMessage(`📡 ENCRYPTED P2P ACTIVE. TYPE YOUR MESSAGE.`);
+        
+        // show online users count after small delay
+        setTimeout(() => {
+            currentChannel.presence.get((err, members) => {
+                if (!err && members) {
+                    const others = members.filter(m => m.clientId !== ablyClient.auth.clientId).length;
+                    addSystemMessage(`👥 ${others} other operative(s) online`);
+                }
+            });
+        }, 800);
     }
+
+    // Send message handler
+    async function sendMessage() {
+        if (!isConnected || !currentChannel || !currentAlias) {
+            addSystemMessage("⚠️ NO ACTIVE LINK. RECONNECTING...", true);
+            return;
+        }
+        const text = messageInput.value.trim();
+        if (text === "") return;
+        try {
+            await currentChannel.publish('msg', { user: currentAlias, text: text });
+            addChatMessage(currentAlias, text, true);
+            messageInput.value = '';
+            messageInput.focus();
+        } catch (err) {
+            console.error(err);
+            addSystemMessage(`TRANSMISSION ERROR: ${err.message}`, true);
+        }
+    }
+
+    // Exit to join overlay (clean disconnect)
+    async function exitToLobby() {
+        await disconnectAndCleanup();
+        appUI.style.display = 'none';
+        joinOverlay.style.display = 'flex';
+        // reset join form fields if needed
+        joinErrorSpan.innerText = '';
+        setConnectionStatus(false);
+        if (chatContainer) while (chatContainer.firstChild) chatContainer.removeChild(chatContainer.firstChild);
+    }
+
+    // JOIN action from overlay
+    connectBtn.addEventListener('click', async () => {
+        const room = roomInput.value.trim();
+        let alias = aliasInput.value.trim();
+        if (!room) {
+            joinErrorSpan.innerText = 'ERROR: CHANNEL REQUIRED';
+            return;
+        }
+        if (!alias) {
+            alias = `OP_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+            aliasInput.value = alias;
+        }
+        joinErrorSpan.innerText = '';
+        connectBtn.disabled = true;
+        connectBtn.innerText = '⟳ CONNECTING...';
+        try {
+            await establishConnection(room, alias);
+            // success -> hide overlay, show chat
+            joinOverlay.style.display = 'none';
+            appUI.style.display = 'flex';
+            messageInput.focus();
+        } catch (err) {
+            console.error(err);
+            joinErrorSpan.innerText = `CONNECTION FAILED: ${err.message}`;
+            await disconnectAndCleanup();
+        } finally {
+            connectBtn.disabled = false;
+            connectBtn.innerText = '⟁ CONNECT TO NETWORK';
+        }
+    });
+
+    // Event listeners for sending
+    sendBtn.addEventListener('click', sendMessage);
+    messageInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+    switchRoomBtn.addEventListener('click', async () => {
+        await exitToLobby();
+    });
+
+    // Auto generate default alias if empty
+    if (aliasInput) {
+        const randomAlias = `GHOST_${Math.floor(Math.random() * 9000 + 1000)}`;
+        aliasInput.value = randomAlias;
+    }
+
+    // Prevent accidental zoom on input focus for mobile
+    const meta = document.createElement('meta');
+    meta.name = "viewport";
+    meta.content = "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover";
+    document.head.appendChild(meta);
+
+    // Optional: manually set initial status
+    setConnectionStatus(false);
+    // handle page unload graceful cleanup
+    window.addEventListener('beforeunload', () => {
+        if (ablyClient && currentChannel && presenceSubscribed) {
+            currentChannel.presence.leave({ alias: currentAlias }).catch(()=>{});
+            ablyClient.close();
+        }
+    });
 </script>
 </body>
 </html>
