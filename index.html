@@ -3,52 +3,63 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>RADER.SHADOW.NET | Encrypted Terminal Chat</title>
+    <title>R.SHADOW.NET</title>
     <script src="https://cdn.ably.com/lib/ably.min-1.js"></script>
     <style>
         * {
+            box-sizing: border-box;
             margin: 0;
             padding: 0;
-            box-sizing: border-box;
             -webkit-tap-highlight-color: transparent;
         }
 
+        /* ROOT VARIABLES - NEON THEME (DEFAULT) */
         :root {
             --neon: #00ff41;
-            --neon-glow: rgba(0, 255, 65, 0.4);
             --bg: #030303;
-            --panel: rgba(0, 8, 0, 0.92);
+            --panel: rgba(0, 10, 0, 0.94);
             --dim: rgba(0, 255, 65, 0.2);
             --border: #00ff41;
-            --text-dim: #9bff9b;
-            --error: #ff3e3e;
+            --glow: 0 0 8px rgba(0,255,65,0.3);
+            --text-glow: 0 0 4px #00ff41;
             --safe-top: env(safe-area-inset-top);
             --safe-bottom: env(safe-area-inset-bottom);
         }
 
-        /* THEMES */
+        /* THEME VARIANTS */
         [data-theme="red"] {
             --neon: #ff3e3e;
             --border: #ff3e3e;
-            --neon-glow: rgba(255, 62, 62, 0.4);
-            --dim: rgba(255, 62, 62, 0.2);
-            --text-dim: #ffaaaa;
+            --dim: rgba(255, 62, 62, 0.25);
+            --glow: 0 0 8px rgba(255,62,62,0.4);
+            --text-glow: 0 0 3px #ff3e3e;
         }
         [data-theme="blue"] {
             --neon: #00ccff;
             --border: #00ccff;
-            --neon-glow: rgba(0, 204, 255, 0.4);
-            --dim: rgba(0, 204, 255, 0.2);
-            --text-dim: #aae6ff;
+            --dim: rgba(0, 204, 255, 0.25);
+            --glow: 0 0 8px rgba(0,204,255,0.4);
+            --text-glow: 0 0 3px #00ccff;
         }
         [data-theme="purple"] {
-            --neon: #c15eff;
-            --border: #c15eff;
-            --neon-glow: rgba(193, 94, 255, 0.4);
-            --dim: rgba(193, 94, 255, 0.2);
-            --text-dim: #e2c2ff;
+            --neon: #b000ff;
+            --border: #b000ff;
+            --dim: rgba(176, 0, 255, 0.25);
+            --glow: 0 0 8px rgba(176,0,255,0.4);
+            --text-glow: 0 0 3px #b000ff;
         }
 
+        /* CRT & ANIMATIONS */
+        @keyframes flicker {
+            0% { opacity: 0.98; text-shadow: var(--text-glow); }
+            5% { opacity: 0.85; text-shadow: none; }
+            10% { opacity: 0.99; text-shadow: var(--text-glow); }
+            100% { opacity: 1; }
+        }
+        @keyframes scan {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100%); }
+        }
         body {
             background: var(--bg);
             color: var(--neon);
@@ -57,9 +68,9 @@
             width: 100vw;
             overflow: hidden;
             position: relative;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
-
-        /* CRT SCAN EFFECT */
         .crt::before {
             content: " ";
             display: block;
@@ -68,145 +79,232 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: repeating-linear-gradient(0deg, rgba(0, 255, 65, 0.02) 0px, rgba(0, 255, 65, 0.02) 2px, transparent 2px, transparent 6px);
+            background: repeating-linear-gradient(0deg, rgba(0, 255, 65, 0.03) 0px, rgba(0, 255, 65, 0.03) 2px, transparent 2px, transparent 4px);
             pointer-events: none;
             z-index: 5;
         }
+        .crt::after {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, transparent 30%, rgba(0,0,0,0.6) 90%);
+            pointer-events: none;
+            z-index: 6;
+        }
 
-        /* MAIN APP LAYOUT */
-        .app-container {
+        /* LOCK SCREEN (ACCESS CONTROL) */
+        #lock-screen {
+            position: fixed;
+            inset: 0;
+            background: #010101;
+            backdrop-filter: blur(2px);
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 2rem;
+            border: 2px solid var(--neon);
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.8), 0 0 25px var(--dim);
+            animation: flicker 0.2s infinite;
+        }
+        .lock-icon {
+            font-size: 4rem;
+            filter: drop-shadow(0 0 12px var(--neon));
+            margin-bottom: 1rem;
+        }
+        .lock-title {
+            font-size: 1.5rem;
+            letter-spacing: 5px;
+            font-weight: bold;
+            background: #000;
+            padding: 0.5rem 1rem;
+            border-left: 3px solid var(--neon);
+            border-right: 3px solid var(--neon);
+            margin-bottom: 1.5rem;
+        }
+        .warning-blink {
+            color: #ff3e3e;
+            text-shadow: 0 0 4px red;
+            font-weight: bold;
+            font-size: 0.85rem;
+        }
+        .code-input-group {
+            margin: 1.8rem 0;
+            width: 90%;
+            max-width: 320px;
+        }
+        .code-input-group input {
+            width: 100%;
+            background: #0a0a0a;
+            border: 1px solid var(--neon);
+            padding: 12px 18px;
+            color: var(--neon);
+            font-family: monospace;
+            font-size: 1rem;
+            text-align: center;
+            letter-spacing: 2px;
+            outline: none;
+            transition: 0.2s;
+        }
+        .code-input-group input:focus {
+            box-shadow: 0 0 15px var(--dim);
+            border-width: 2px;
+        }
+        .access-btn {
+            background: transparent;
+            border: 1.5px solid var(--neon);
+            color: var(--neon);
+            padding: 8px 28px;
+            font-family: inherit;
+            font-weight: bold;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: 0.2s;
+            margin-top: 0.5rem;
+            letter-spacing: 2px;
+        }
+        .access-btn:hover {
+            background: var(--neon);
+            color: #000;
+            box-shadow: 0 0 18px var(--neon);
+        }
+        .deny-msg {
+            margin-top: 1.5rem;
+            font-size: 0.7rem;
+            color: #aa4444;
+            border-top: 1px dashed #333;
+            padding-top: 1rem;
+            max-width: 280px;
+        }
+        .hash-hint {
+            font-size: 0.6rem;
+            opacity: 0.6;
+            margin-top: 1rem;
+        }
+
+        /* MAIN APP UI */
+        .app-wrapper {
             display: flex;
             flex-direction: column;
             height: 100vh;
             width: 100vw;
+            visibility: hidden;
             background: var(--bg);
             position: relative;
             z-index: 2;
         }
 
         /* HEADER */
-        .terminal-header {
+        .cyber-header {
             flex-shrink: 0;
-            padding: calc(0.8rem + var(--safe-top)) 1.5rem 0.8rem 1.5rem;
-            background: var(--panel);
-            border-bottom: 2px solid var(--border);
-            box-shadow: 0 0 15px var(--neon-glow);
-            backdrop-filter: blur(2px);
+            padding: calc(0.8rem + var(--safe-top)) 1.2rem 0.7rem;
             display: flex;
-            flex-wrap: wrap;
             justify-content: space-between;
             align-items: baseline;
-            gap: 12px;
+            flex-wrap: wrap;
+            background: var(--panel);
+            border-bottom: 2px solid var(--border);
+            box-shadow: 0 3px 20px rgba(0,0,0,0.7);
+            backdrop-filter: blur(4px);
         }
         .brand {
-            font-size: 1.25rem;
+            font-size: 1.2rem;
             font-weight: bold;
-            letter-spacing: 2px;
-            text-shadow: 0 0 6px var(--neon);
+            text-shadow: 0 0 8px var(--neon);
+            letter-spacing: 3px;
         }
-        .channel-badge {
-            font-size: 0.7rem;
-            background: var(--dim);
-            padding: 4px 10px;
-            border-radius: 20px;
-            border-left: 2px solid var(--neon);
+        .subbrand {
+            font-size: 0.65rem;
+            opacity: 0.7;
             font-family: monospace;
+            background: rgba(0,0,0,0.5);
+            padding: 0 6px;
         }
-        .status-pill {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-left: auto;
-        }
-        .connection-led {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: #ff5e5e;
-            box-shadow: 0 0 5px currentColor;
-            transition: all 0.2s;
-        }
-        .connection-led.online {
-            background: var(--neon);
-            box-shadow: 0 0 8px var(--neon);
-        }
-        .action-btn {
+        #theme-toggle {
             background: transparent;
             border: 1px solid var(--neon);
             color: var(--neon);
-            padding: 4px 12px;
+            padding: 4px 10px;
+            font-size: 0.65rem;
             font-family: inherit;
-            font-size: 0.7rem;
             cursor: pointer;
-            transition: 0.2s;
-            border-radius: 2px;
+            transition: all 0.2s;
         }
-        .action-btn:hover {
+        #theme-toggle:hover {
             background: var(--neon);
             color: black;
-            box-shadow: 0 0 6px var(--neon);
-        }
-        .discord-link {
-            color: var(--neon);
-            text-decoration: none;
-            font-size: 0.7rem;
-            border-bottom: 1px dashed var(--dim);
+            box-shadow: 0 0 10px var(--neon);
         }
 
-        /* CHAT MESSAGES AREA */
-        .chat-messages {
+        /* CHAT CONTAINER */
+        .chat-area {
             flex: 1;
             overflow-y: auto;
             padding: 1.2rem;
             display: flex;
             flex-direction: column;
-            gap: 0.65rem;
+            gap: 0.7rem;
             scroll-behavior: smooth;
         }
-        .message {
+        .chat-area::-webkit-scrollbar {
+            width: 4px;
+        }
+        .chat-area::-webkit-scrollbar-track {
+            background: #111;
+        }
+        .chat-area::-webkit-scrollbar-thumb {
+            background: var(--neon);
+        }
+        .message-entry {
             font-size: 0.85rem;
-            line-height: 1.4;
+            line-height: 1.45;
             border-left: 2px solid var(--neon);
             padding-left: 12px;
             word-break: break-word;
-            animation: fadeSlide 0.2s ease;
-            color: var(--text-dim);
-        }
-        .message.system {
-            border-left-color: var(--dim);
-            opacity: 0.7;
-            font-style: italic;
-            font-size: 0.75rem;
+            animation: glitchEntry 0.2s ease-out;
+            font-weight: 400;
         }
         .timestamp {
-            color: #6f6f6f;
+            color: #6b8c6b;
             font-size: 0.65rem;
             margin-right: 10px;
-            letter-spacing: 0.5px;
+            font-weight: normal;
+            letter-spacing: 0;
         }
         .username {
             font-weight: bold;
             color: var(--neon);
-            margin-right: 8px;
+            text-shadow: 0 0 2px var(--dim);
+        }
+        @keyframes glitchEntry {
+            0% { opacity: 0; transform: translateX(-4px);}
+            100% { opacity: 1; transform: translateX(0);}
         }
 
-        /* INPUT CONSOLE BAR */
+        /* TERMINAL INPUT BAR (FIXED BOTTOM - ERGONOMIC) */
         .input-console {
             flex-shrink: 0;
             background: var(--panel);
-            border-top: 1px solid var(--border);
-            padding: 10px 16px calc(12px + var(--safe-bottom));
+            border-top: 1px solid var(--neon);
+            backdrop-filter: blur(8px);
+            padding: 12px 16px calc(12px + var(--safe-bottom));
             display: flex;
             align-items: center;
             gap: 12px;
-            backdrop-filter: blur(4px);
+            z-index: 10;
         }
         .prompt-symbol {
-            font-size: 1.2rem;
-            opacity: 0.9;
             font-weight: bold;
+            font-size: 1.1rem;
+            opacity: 0.9;
+            white-space: nowrap;
         }
-        #messageInput {
+        #msgInput {
             flex: 1;
             background: transparent;
             border: none;
@@ -214,224 +312,92 @@
             font-family: 'Courier New', monospace;
             font-size: 1rem;
             outline: none;
-            padding: 8px 0;
+            padding: 10px 0;
+            width: 100%;
         }
-        #messageInput::placeholder {
+        #msgInput::placeholder {
             color: var(--dim);
             font-size: 0.85rem;
+            letter-spacing: 1px;
         }
-        .send-btn {
-            background: transparent;
-            border: 1px solid var(--neon);
-            color: var(--neon);
-            padding: 6px 14px;
-            font-family: monospace;
-            font-weight: bold;
-            cursor: pointer;
-            transition: 0.2s;
-            border-radius: 2px;
-        }
-        .send-btn:active {
-            background: var(--neon);
-            color: black;
+        /* Platform specific refinements */
+        .platform-ios .input-console, .platform-android .input-console {
+            padding-bottom: calc(18px + var(--safe-bottom));
         }
 
-        /* JOIN OVERLAY (LOCK SCREEN REDESIGN) */
-        .join-overlay {
-            position: fixed;
-            inset: 0;
-            background: #000000dd;
-            backdrop-filter: blur(8px);
-            z-index: 1000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-family: monospace;
-            transition: opacity 0.4s;
-        }
-        .join-card {
-            background: var(--panel);
-            border: 1.5px solid var(--neon);
-            padding: 2rem 1.8rem;
-            width: 90%;
-            max-width: 420px;
+        /* system status line */
+        .sys-status {
+            font-size: 0.6rem;
+            background: #0a0f0a;
+            padding: 2px 12px;
             text-align: center;
-            box-shadow: 0 0 40px var(--neon-glow);
-            border-radius: 8px;
-        }
-        .join-card h2 {
-            font-size: 1.6rem;
-            letter-spacing: 2px;
-            margin-bottom: 0.8rem;
-        }
-        .join-card .glowing {
-            color: var(--neon);
-            text-shadow: 0 0 4px var(--neon);
-        }
-        .input-group {
-            margin: 1.2rem 0;
-            text-align: left;
-        }
-        .input-group label {
-            font-size: 0.7rem;
-            opacity: 0.7;
-            display: block;
-            margin-bottom: 5px;
-        }
-        .join-input {
-            width: 100%;
-            background: #0a0f0a;
-            border: 1px solid var(--neon);
-            padding: 10px 12px;
-            color: var(--neon);
-            font-family: monospace;
-            font-size: 0.9rem;
-            outline: none;
-        }
-        .join-btn {
-            background: transparent;
-            border: 1px solid var(--neon);
-            color: var(--neon);
-            padding: 10px 24px;
-            margin-top: 10px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: 0.2s;
-            width: 100%;
-        }
-        .join-btn:hover {
-            background: var(--neon);
-            color: black;
-            box-shadow: 0 0 10px var(--neon);
-        }
-        .error-msg {
-            color: var(--error);
-            font-size: 0.7rem;
-            margin-top: 8px;
+            color: #5f9e5f;
+            border-top: 1px dashed var(--dim);
         }
 
-        @keyframes fadeSlide {
-            from {
-                opacity: 0;
-                transform: translateX(-6px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-
-        /* SCROLLBAR */
-        .chat-messages::-webkit-scrollbar {
-            width: 4px;
-        }
-        .chat-messages::-webkit-scrollbar-track {
-            background: #0a0f0a;
-        }
-        .chat-messages::-webkit-scrollbar-thumb {
-            background: var(--neon);
+        /* responsive touch optimizations */
+        @media (max-width: 600px) {
+            .brand { font-size: 0.9rem; }
+            .message-entry { font-size: 0.78rem; }
+            .cyber-header { padding: 0.7rem 0.9rem; }
+            .input-console { padding: 10px 12px calc(10px + var(--safe-bottom)); }
+            .prompt-symbol { font-size: 0.9rem; }
         }
     </style>
 </head>
 <body class="crt">
 
-<div id="joinOverlay" class="join-overlay">
-    <div class="join-card">
-        <div class="glowing">⚡ RADER.SHADOW.NET ⚡</div>
-        <h2 style="font-size:1rem; margin-top:12px;">ENCRYPTED TERMINAL</h2>
-        <div class="input-group">
-            <label>CHANNEL / ROOM</label>
-            <input type="text" id="roomInput" class="join-input" placeholder="rader-2244" value="rader-2244">
-        </div>
-        <div class="input-group">
-            <label>ALIAS (IDENTITY)</label>
-            <input type="text" id="aliasInput" class="join-input" placeholder="GHOST_47" value="">
-        </div>
-        <button id="connectBtn" class="join-btn">⟁ CONNECT TO NETWORK</button>
-        <div id="joinError" class="error-msg"></div>
-        <div style="font-size: 0.6rem; margin-top: 16px; opacity:0.5;">P2P MESH | REAL-TIME CIPHER</div>
+<!-- ACCESS LOCK SCREEN (DENIED BY DEFAULT) -->
+<div id="lock-screen">
+    <div class="lock-icon">⛔</div>
+    <div class="lock-title">SECURE GATEWAY</div>
+    <div id="lockStatus" class="warning-blink">🔐 ACCESS REQUIRED</div>
+    <div class="code-input-group">
+        <input type="text" id="channelCodeInput" placeholder="ENTER CHANNEL CODE" autocomplete="off" spellcheck="false">
+        <button id="submitCodeBtn" class="access-btn">AUTHENTICATE</button>
     </div>
+    <div class="deny-msg" id="denyMessage">NO VALID CHANNEL CODE → ACCESS DENIED</div>
+    <div class="hash-hint">[ R.SHADOW SURVEILLANCE ]</div>
 </div>
 
-<div id="appUI" class="app-container" style="display: none;">
-    <header class="terminal-header">
-        <div class="brand">[R.SHADOW.net]</div>
-        <div class="channel-badge" id="roomDisplay">channel: --</div>
-        <div class="status-pill">
-            <span id="connectionLed" class="connection-led"></span>
-            <span id="connStatusText" style="font-size:0.7rem;">OFFLINE</span>
-            <button id="themeToggleBtn" class="action-btn">CYCLE_MODE</button>
-            <button id="switchRoomBtn" class="action-btn">⟳ EXIT</button>
-        </div>
-    </header>
-    <div id="chatContainer" class="chat-messages"></div>
-    <div class="input-console">
-        <span class="prompt-symbol">[>>]></span>
-        <input type="text" id="messageInput" placeholder="TRANSMIT MESSAGE..." autocomplete="off">
-        <button id="sendMessageBtn" class="send-btn">SEND</button>
+<!-- MAIN CHAT INTERFACE -->
+<div class="app-wrapper" id="app-ui">
+    <div class="cyber-header">
+        <div class="brand">⚡R.SHADOW.NET</div>
+        <div class="subbrand">DISCORD: https://discord.gg/KN9PtxZjk | ENCRYPTED CHAIN</div>
+        <button id="theme-toggle" aria-label="cycle theme">CYC_MODE</button>
     </div>
+    <div id="chat-box" class="chat-area"></div>
+    <div class="input-console">
+        <span class="prompt-symbol">[&gt;&gt;]&gt;</span>
+        <input type="text" id="msgInput" placeholder="ENCRYPTED MESSAGE..." autocomplete="off">
+    </div>
+    <div class="sys-status" id="connStatus">⚡ SECURE CHANNEL // OFFLINE</div>
 </div>
 
 <script>
-    // ---------------------- GLOBALS --------------------------
-    let ablyClient = null;
-    let currentChannel = null;
-    let currentRoom = null;
-    let currentAlias = null;
-    let isConnected = false;
-    let presenceSubscribed = false;
+    // ----------------------------- SECURITY & GLOBALS -------------------------
+    // Allowed channel codes (Only these grant access)
+    const ALLOWED_CHANNELS = ['rader-2244'];
+    const ABLY_API_KEY = '8aNVog.se0xuQ:cPGNxEHS92b0xGqx6PpT1jRNDCVD0Y5DFX_6A45Btk';
     
-    const API_KEY = '8aNVog.se0xuQ:cPGNxEHS92b0xGqx6PpT1jRNDCVD0Y5DFX_6A45BtkA';
-    const chatContainer = document.getElementById('chatContainer');
-    const appUI = document.getElementById('appUI');
-    const joinOverlay = document.getElementById('joinOverlay');
-    const roomDisplaySpan = document.getElementById('roomDisplay');
-    const connectionLed = document.getElementById('connectionLed');
-    const connStatusText = document.getElementById('connStatusText');
-    const joinErrorSpan = document.getElementById('joinError');
-    const roomInput = document.getElementById('roomInput');
-    const aliasInput = document.getElementById('aliasInput');
-    const connectBtn = document.getElementById('connectBtn');
-    const messageInput = document.getElementById('messageInput');
-    const sendBtn = document.getElementById('sendMessageBtn');
-    const themeToggleBtn = document.getElementById('themeToggleBtn');
-    const switchRoomBtn = document.getElementById('switchRoomBtn');
+    let activeAbly = null;
+    let activeChannel = null;
+    let currentAlias = null;
+    let isChatInitialized = false;
 
-    // Theme system
-    const themes = ['', 'red', 'blue', 'purple'];
-    let themeIndex = 0;
-    function cycleTheme() {
-        themeIndex = (themeIndex + 1) % themes.length;
-        const themeVal = themes[themeIndex];
-        if (themeVal) {
-            document.documentElement.setAttribute('data-theme', themeVal);
-        } else {
-            document.documentElement.removeAttribute('data-theme');
-        }
-    }
-    themeToggleBtn.addEventListener('click', cycleTheme);
+    // DOM elements
+    const lockScreen = document.getElementById('lock-screen');
+    const appUI = document.getElementById('app-ui');
+    const chatBox = document.getElementById('chat-box');
+    const msgInput = document.getElementById('msgInput');
+    const connStatusSpan = document.getElementById('connStatus');
+    const lockStatusDiv = document.getElementById('lockStatus');
+    const denyMsgSpan = document.getElementById('denyMessage');
+    const channelInput = document.getElementById('channelCodeInput');
+    const submitBtn = document.getElementById('submitCodeBtn');
 
-    // Helper: system message in chat
-    function addSystemMessage(text, isError = false) {
-        if (!chatContainer) return;
-        const msgDiv = document.createElement('div');
-        msgDiv.className = 'message system';
-        const timeHex = new Date().getTime().toString(16).slice(-6).toUpperCase();
-        msgDiv.innerHTML = `<span class="timestamp">[0x${timeHex}]</span> <span style="color: ${isError ? '#ff5e5e' : 'var(--neon)'};">⛓️ ${escapeHtml(text)}</span>`;
-        chatContainer.appendChild(msgDiv);
-        msgDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-
-    function addChatMessage(user, text, isOwn = false) {
-        if (!chatContainer) return;
-        const msgDiv = document.createElement('div');
-        msgDiv.className = 'message';
-        const timeHex = new Date().getTime().toString(16).slice(-6).toUpperCase();
-        msgDiv.innerHTML = `<span class="timestamp">[0x${timeHex}]</span> <span class="username">${escapeHtml(user)}</span>: ${escapeHtml(text)}`;
-        chatContainer.appendChild(msgDiv);
-        msgDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-
+    // Helper: sanitize HTML to prevent XSS (cyber security essential)
     function escapeHtml(str) {
         if (!str) return '';
         return str.replace(/[&<>]/g, function(m) {
@@ -444,227 +410,272 @@
         });
     }
 
-    // Update connection status UI
-    function setConnectionStatus(online) {
-        isConnected = online;
-        if (online) {
-            connectionLed.classList.add('online');
-            connStatusText.innerText = 'ONLINE';
+    // Format timestamp (HEX style matching original aesthetic)
+    function getHexTimestamp() {
+        return '0x' + new Date().getTime().toString(16).slice(-6).toUpperCase();
+    }
+
+    // Append message to chat (secure, sanitized)
+    function appendMessage(user, text, isSystem = false) {
+        const entry = document.createElement('div');
+        entry.className = 'message-entry';
+        const timeHex = getHexTimestamp();
+        if (isSystem) {
+            entry.innerHTML = `<span class="timestamp">[${timeHex}]</span> <span style="color:#acacac;">🔒 SYSTEM: ${escapeHtml(text)}</span>`;
         } else {
-            connectionLed.classList.remove('online');
-            connStatusText.innerText = 'OFFLINE';
+            const safeUser = escapeHtml(user);
+            const safeText = escapeHtml(text);
+            entry.innerHTML = `<span class="timestamp">[${timeHex}]</span> <span class="username">${safeUser}</span>: ${safeText}`;
+        }
+        chatBox.appendChild(entry);
+        entry.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // System status update
+    function setStatus(text, isError = false) {
+        if (connStatusSpan) {
+            connStatusSpan.innerHTML = isError ? `⚠️ ${text}` : `🟢 ${text}`;
+            connStatusSpan.style.color = isError ? '#ff6666' : 'var(--neon)';
         }
     }
 
-    // Cleanup previous connection
-    async function disconnectAndCleanup() {
-        if (currentChannel) {
-            try {
-                if (presenceSubscribed && currentChannel.presence) {
-                    await currentChannel.presence.leave({ alias: currentAlias });
-                }
-                await currentChannel.detach();
-            } catch(e) { console.warn(e); }
-            currentChannel = null;
+    // Destroy previous connection if any
+    function cleanupConnection() {
+        if (activeChannel) {
+            try { activeChannel.unsubscribe(); } catch(e) {}
         }
-        if (ablyClient) {
-            try {
-                ablyClient.close();
-            } catch(e) {}
-            ablyClient = null;
+        if (activeAbly) {
+            try { activeAbly.close(); } catch(e) {}
         }
-        presenceSubscribed = false;
+        activeAbly = null;
+        activeChannel = null;
     }
 
-    // Initialize connection to Ably room
-    async function establishConnection(roomName, alias) {
-        if (!roomName || !alias) {
-            throw new Error('CHANNEL & ALIAS REQUIRED');
+    // Core chat initialization after channel grant
+    function initializeSecureChat(channelCode) {
+        if (isChatInitialized) {
+            cleanupConnection();
+            while(chatBox.firstChild) chatBox.removeChild(chatBox.firstChild);
         }
-        const sanitizedRoom = roomName.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '-');
-        if (sanitizedRoom.length === 0) throw new Error('Invalid channel name');
-        const finalAlias = alias.trim().slice(0, 24) || `agent_${Math.floor(Math.random()*1000)}`;
-
-        // Clean any existing connection
-        await disconnectAndCleanup();
-
-        // Create Ably client with clientId for presence
-        ablyClient = new Ably.Realtime({
-            key: API_KEY,
-            clientId: finalAlias
-        });
-
-        // Channel with prefix (consistent naming)
-        const fullChannelName = `rader-v4-${sanitizedRoom}`;
-        currentChannel = ablyClient.channels.get(fullChannelName);
-        currentRoom = sanitizedRoom;
-        currentAlias = finalAlias;
-
-        // Connection state monitoring
-        ablyClient.connection.on((stateChange) => {
-            if (stateChange.current === 'connected') {
-                setConnectionStatus(true);
-                addSystemMessage(`>> LINK ESTABLISHED : ${fullChannelName} as ${finalAlias}`);
-                // re-enter presence if needed
-                if (currentChannel && currentChannel.presence) {
-                    currentChannel.presence.enter({ alias: finalAlias }).catch(e => console.warn);
-                }
-            } else if (stateChange.current === 'disconnected') {
-                setConnectionStatus(false);
-                addSystemMessage(`! CARRIER LOST - RECONNECTING`, true);
-            } else if (stateChange.current === 'failed') {
-                setConnectionStatus(false);
-                addSystemMessage(`✖ FATAL: CONNECTION FAILED`, true);
-            }
-        });
-
-        // Attach channel
-        await new Promise((resolve, reject) => {
-            currentChannel.attach((err) => {
-                if (err) reject(new Error(`Channel attach error: ${err.message}`));
-                else resolve();
-            });
-        });
-
-        // Subscribe to chat messages
-        currentChannel.subscribe('msg', (message) => {
-            const data = message.data;
-            if (data && data.user && data.text) {
-                addChatMessage(data.user, data.text);
-            }
-        });
-
-        // PRESENCE: Show join / leave events
-        await currentChannel.presence.enter({ alias: finalAlias });
-        presenceSubscribed = true;
-
-        currentChannel.presence.subscribe('enter', (presenceMsg) => {
-            if (presenceMsg.clientId !== ablyClient.auth.clientId) {
-                const userAlias = presenceMsg.data?.alias || presenceMsg.clientId;
-                addSystemMessage(`++ ${userAlias} joined the network`);
-            }
-        });
-        currentChannel.presence.subscribe('leave', (presenceMsg) => {
-            if (presenceMsg.clientId !== ablyClient.auth.clientId) {
-                const userAlias = presenceMsg.data?.alias || presenceMsg.clientId;
-                addSystemMessage(`-- ${userAlias} left the network`);
-            }
-        });
-
-        // Update UI display
-        roomDisplaySpan.innerText = `#${sanitizedRoom} | @${finalAlias}`;
-        setConnectionStatus(true);
         
-        // Clear chat container for fresh start
-        while (chatContainer.firstChild) chatContainer.removeChild(chatContainer.firstChild);
-        addSystemMessage(`🔒 SECURE TERMINAL ACTIVE | ROOM: ${sanitizedRoom} | ALIAS: ${finalAlias}`);
-        addSystemMessage(`📡 ENCRYPTED P2P ACTIVE. TYPE YOUR MESSAGE.`);
+        // Ask for alias (professional handle)
+        let aliasInput = prompt("IDENTIFY YOUR CREDENTIAL:", "AGENT_" + Math.random().toString(36).substring(2, 6).toUpperCase());
+        if (!aliasInput || aliasInput.trim() === "") {
+            aliasInput = "GHOST_" + Math.floor(Math.random() * 9000 + 1000);
+        }
+        currentAlias = aliasInput.trim().substring(0, 20);
         
-        // show online users count after small delay
-        setTimeout(() => {
-            currentChannel.presence.get((err, members) => {
-                if (!err && members) {
-                    const others = members.filter(m => m.clientId !== ablyClient.auth.clientId).length;
-                    addSystemMessage(`👥 ${others} other operative(s) online`);
+        setStatus(`CONNECTING TO CHANNEL [${channelCode}]...`);
+        
+        try {
+            activeAbly = new Ably.Realtime(ABLY_API_KEY);
+            
+            // Channel naming pattern: rader-v4-XXXX
+            const channelName = `rader-v4-${channelCode}`;
+            activeChannel = activeAbly.channels.get(channelName);
+            
+            // Subscribe to incoming messages
+            activeChannel.subscribe('msg', (message) => {
+                if (message.data && typeof message.data === 'object') {
+                    const { user, text } = message.data;
+                    if (user && text !== undefined) {
+                        appendMessage(user, text, false);
+                    }
                 }
             });
-        }, 800);
+            
+            // Connection state monitoring
+            activeAbly.connection.on('connected', () => {
+                setStatus(`ACTIVE // ENCRYPTED CHANNEL: ${channelCode.toUpperCase()}`);
+                appendMessage("🔥 SYSTEM", `Connected to secure relay: ${channelCode}`, true);
+            });
+            
+            activeAbly.connection.on('failed', (err) => {
+                setStatus(`CONNECTION FAILURE: RELAY LOST`, true);
+                appendMessage("⚠️ CRYPTO", "Link failure – retry or refresh", true);
+            });
+            
+            activeAbly.connection.on('disconnected', () => {
+                setStatus("SIGNAL INTERRUPTED - RECONNECTING", true);
+            });
+            
+            isChatInitialized = true;
+            
+            // Welcome entry
+            setTimeout(() => {
+                appendMessage("🔷 SYSTEM", `Access granted. Encrypted session active. Alias: ${currentAlias}`, true);
+            }, 300);
+            
+        } catch (err) {
+            console.error("Ably init error", err);
+            setStatus("FATAL: CRYPTO ENGINE OFFLINE", true);
+            appendMessage("⚠️ CRYPTO", "Channel initialization failed. Refresh or check credentials.", true);
+        }
     }
-
-    // Send message handler
-    async function sendMessage() {
-        if (!isConnected || !currentChannel || !currentAlias) {
-            addSystemMessage("⚠️ NO ACTIVE LINK. RECONNECTING...", true);
+    
+    // Publish message to channel
+    function sendMessage(text) {
+        if (!activeChannel || !isChatInitialized) {
+            appendMessage("⚠️", "Channel not ready. Wait for sync.", true);
+            return false;
+        }
+        if (!text.trim()) return false;
+        const payload = {
+            user: currentAlias,
+            text: text.trim()
+        };
+        activeChannel.publish('msg', payload, (err) => {
+            if (err) {
+                appendMessage("ERROR", "Transmission failed: " + err.message, true);
+                setStatus("TX ERROR", true);
+            }
+        });
+        return true;
+    }
+    
+    // ------------------------- ACCESS CONTROL LOGIC -------------------------
+    function grantAccess(channelCode) {
+        if (!ALLOWED_CHANNELS.includes(channelCode)) {
+            // Deny access - update lock UI to reflect invalid
+            lockStatusDiv.innerHTML = "⛔ ACCESS DENIED";
+            denyMsgSpan.innerHTML = `INVALID CHANNEL CODE: "${escapeHtml(channelCode)}" → TERMINAL BLOCKED`;
+            denyMsgSpan.style.color = "#ff5555";
+            lockStatusDiv.style.color = "#ff5555";
+            return false;
+        }
+        
+        // Valid code: hide lock screen, show chat UI, init
+        lockScreen.style.display = 'none';
+        appUI.style.visibility = 'visible';
+        initializeSecureChat(channelCode);
+        
+        // Focus input for seamless usage
+        setTimeout(() => { if(msgInput) msgInput.focus(); }, 400);
+        return true;
+    }
+    
+    // Handle code submission from lock screen input
+    function attemptAccessFromInput() {
+        let rawCode = channelInput.value.trim().toLowerCase();
+        if (rawCode === "") {
+            lockStatusDiv.innerHTML = "⚠️ EMPTY CHANNEL CODE";
+            denyMsgSpan.innerHTML = "NO CHANNEL CODE PROVIDED → ACCESS DENIED";
+            denyMsgSpan.style.color = "#ffaa55";
             return;
         }
-        const text = messageInput.value.trim();
-        if (text === "") return;
-        try {
-            await currentChannel.publish('msg', { user: currentAlias, text: text });
-            addChatMessage(currentAlias, text, true);
-            messageInput.value = '';
-            messageInput.focus();
-        } catch (err) {
-            console.error(err);
-            addSystemMessage(`TRANSMISSION ERROR: ${err.message}`, true);
+        if (grantAccess(rawCode)) {
+            // success, UI changes already
+        } else {
+            // failed: keep lock screen with deny style
+            lockStatusDiv.innerHTML = "⛔ INVALID CREDENTIAL";
         }
     }
-
-    // Exit to join overlay (clean disconnect)
-    async function exitToLobby() {
-        await disconnectAndCleanup();
-        appUI.style.display = 'none';
-        joinOverlay.style.display = 'flex';
-        // reset join form fields if needed
-        joinErrorSpan.innerText = '';
-        setConnectionStatus(false);
-        if (chatContainer) while (chatContainer.firstChild) chatContainer.removeChild(chatContainer.firstChild);
+    
+    // Check URL hash fragment first (exact behavior as original)
+    function checkHashForAccess() {
+        const hash = window.location.hash.substring(1).toLowerCase();
+        if (hash && ALLOWED_CHANNELS.includes(hash)) {
+            // auto-grant via hash
+            grantAccess(hash);
+            return true;
+        }
+        return false;
     }
-
-    // JOIN action from overlay
-    connectBtn.addEventListener('click', async () => {
-        const room = roomInput.value.trim();
-        let alias = aliasInput.value.trim();
-        if (!room) {
-            joinErrorSpan.innerText = 'ERROR: CHANNEL REQUIRED';
-            return;
+    
+    // ------------------------- UI & PLATFORM ADAPTATIONS -------------------------
+    function detectPlatform() {
+        const ua = navigator.userAgent.toLowerCase();
+        const bodyClass = document.body;
+        if (/iphone|ipad|ipod/.test(ua)) bodyClass.classList.add("platform-ios");
+        else if (/android/.test(ua)) bodyClass.classList.add("platform-android");
+        else bodyClass.classList.add("platform-windows");
+        
+        // adjust font rendering for mobile
+        if (/mobile|android|iphone|ipad/.test(ua)) {
+            const style = document.createElement('style');
+            style.textContent = `#msgInput { font-size: 16px; } .message-entry { font-size: 0.85rem; }`;
+            document.head.appendChild(style);
         }
-        if (!alias) {
-            alias = `OP_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
-            aliasInput.value = alias;
-        }
-        joinErrorSpan.innerText = '';
-        connectBtn.disabled = true;
-        connectBtn.innerText = '⟳ CONNECTING...';
-        try {
-            await establishConnection(room, alias);
-            // success -> hide overlay, show chat
-            joinOverlay.style.display = 'none';
-            appUI.style.display = 'flex';
-            messageInput.focus();
-        } catch (err) {
-            console.error(err);
-            joinErrorSpan.innerText = `CONNECTION FAILED: ${err.message}`;
-            await disconnectAndCleanup();
-        } finally {
-            connectBtn.disabled = false;
-            connectBtn.innerText = '⟁ CONNECT TO NETWORK';
-        }
-    });
-
-    // Event listeners for sending
-    sendBtn.addEventListener('click', sendMessage);
-    messageInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            sendMessage();
-        }
-    });
-    switchRoomBtn.addEventListener('click', async () => {
-        await exitToLobby();
-    });
-
-    // Auto generate default alias if empty
-    if (aliasInput) {
-        const randomAlias = `GHOST_${Math.floor(Math.random() * 9000 + 1000)}`;
-        aliasInput.value = randomAlias;
     }
-
-    // Prevent accidental zoom on input focus for mobile
-    const meta = document.createElement('meta');
-    meta.name = "viewport";
-    meta.content = "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover";
-    document.head.appendChild(meta);
-
-    // Optional: manually set initial status
-    setConnectionStatus(false);
-    // handle page unload graceful cleanup
+    
+    // Theme cycling (professional)
+    const themes = ['', 'red', 'blue', 'purple'];
+    let themeIndex = 0;
+    function cycleTheme() {
+        themeIndex = (themeIndex + 1) % themes.length;
+        document.documentElement.setAttribute('data-theme', themes[themeIndex]);
+        localStorage.setItem('radersh_theme', themes[themeIndex]);
+    }
+    function loadSavedTheme() {
+        const saved = localStorage.getItem('radersh_theme');
+        if (saved && themes.includes(saved)) {
+            themeIndex = themes.indexOf(saved);
+            document.documentElement.setAttribute('data-theme', saved);
+        }
+    }
+    
+    // Chat input handler
+    function setupChatEvents() {
+        if (!msgInput) return;
+        msgInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const rawMsg = msgInput.value;
+                if (rawMsg.trim().length > 0) {
+                    sendMessage(rawMsg);
+                    msgInput.value = '';
+                }
+            }
+        });
+        // Optional click on status area for focus
+        document.querySelector('.input-console')?.addEventListener('click', () => msgInput.focus());
+    }
+    
+    // ------------------------- INITIALIZATION FLOW -------------------------
+    function bootstrap() {
+        detectPlatform();
+        loadSavedTheme();
+        setupChatEvents();
+        
+        // Theme toggle button
+        const themeBtn = document.getElementById('theme-toggle');
+        if (themeBtn) {
+            themeBtn.addEventListener('click', cycleTheme);
+        }
+        
+        // Lock screen controls
+        submitBtn.addEventListener('click', attemptAccessFromInput);
+        channelInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') attemptAccessFromInput();
+        });
+        
+        // Priority: check URL hash (original exact behavior)
+        const hashGranted = checkHashForAccess();
+        if (!hashGranted) {
+            // lock screen remains with deny message + interactive input
+            lockStatusDiv.innerHTML = "🔐 AUTHORIZATION REQUIRED";
+            denyMsgSpan.innerHTML = "NO VALID CHANNEL CODE → ACCESS DENIED";
+            denyMsgSpan.style.color = "#ff6e6e";
+            // Additional: display example for user
+            channelInput.placeholder = "";
+            // keep lock screen visible, no chat UI
+            appUI.style.visibility = 'hidden';
+        } else {
+            // UI already visible due to grantAccess
+            // ensure lock screen hidden, focus chat
+            setTimeout(() => {
+                if(msgInput) msgInput.focus();
+            }, 500);
+        }
+    }
+    
+    // Ensure proper cleanup on page unload
     window.addEventListener('beforeunload', () => {
-        if (ablyClient && currentChannel && presenceSubscribed) {
-            currentChannel.presence.leave({ alias: currentAlias }).catch(()=>{});
-            ablyClient.close();
-        }
+        if (activeAbly) activeAbly.close();
     });
+    
+    // start everything
+    bootstrap();
 </script>
 </body>
 </html>
